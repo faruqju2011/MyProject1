@@ -46,9 +46,11 @@ proc sql;
 quit;
 title;
 
-/* Set the library and table you found above.                              */
-%let lib   = audit;           /* <-- library from the scan (LIBNAME col)   */
-%let table = cybersecurity;   /* <-- member  from the scan (MEMNAME col)   */
+/* Confirmed on WRDS: Audit Analytics Cyber Security feed (Feed 85).        */
+/* FEED85_CYBERSECURITY is the flat one-row-per-breach file and carries     */
+/* both the firm identifiers and the disclosure date (no join needed).      */
+%let lib   = audit;                 /* library from the scan (LIBNAME col)  */
+%let table = FEED85_CYBERSECURITY;  /* member  from the scan (MEMNAME col)  */
 
 /*---------------------------------------------------------------------------
   2. Inspect the columns so we can pick the date and firm identifier
@@ -62,16 +64,17 @@ quit;
 title;
 
 /*---------------------------------------------------------------------------
-  3. Pick the disclosure-date column and the firm identifier
-     (set these to the real column names shown in step 2)
+  3. Disclosure-date column and firm identifier (confirmed from step 2)
 
-     disclosure date : disclosuredate, date_of_disclosure, date_of_breach,
-                        date_became_aware
-     firm identifier : company_fkey (Audit Analytics key), ticker, cik,
-                        company_name
+     BREACH_DISCLOSURE_DATE : numeric SAS date (YYMMDD10.) = the date the
+                              firm publicly disclosed the breach.
+     COMPANY_FKEY           : Audit Analytics company key (the firm).
+     Alternatives available : NAME, BEST_EDGAR_TICKER, CUSIP_NUMBER.
+     Other date columns in this feed, if you ever want them:
+       BREACH_AWARE_DATE, BREACH_START_DATE, BREACH_END_DATE.
 ---------------------------------------------------------------------------*/
-%let date_col = disclosuredate;   /* <-- set to the real date column   */
-%let firm_col = company_fkey;     /* <-- set to your firm identifier    */
+%let date_col = BREACH_DISCLOSURE_DATE;   /* disclosure/filing date        */
+%let firm_col = COMPANY_FKEY;             /* firm identifier               */
 
 /*---------------------------------------------------------------------------
   4. Min / max disclosure date per firm
@@ -79,8 +82,9 @@ title;
 proc sql;
     create table cyberbreach_by_firm as
     select &firm_col           as firm,
-           min(&date_col)      as first_disclosure format=date9.,
-           max(&date_col)      as last_disclosure  format=date9.,
+           max(NAME)           as company_name length=200,
+           min(&date_col)      as first_disclosure format=yymmdd10.,
+           max(&date_col)      as last_disclosure  format=yymmdd10.,
            count(*)            as n_breaches
     from &lib..&table
     where &date_col is not null
@@ -98,8 +102,8 @@ title;
 ---------------------------------------------------------------------------*/
 proc sql;
     title "Overall cyber-breach disclosure-date range";
-    select min(&date_col) as min_date format=date9.,
-           max(&date_col) as max_date format=date9.
+    select min(&date_col) as min_date format=yymmdd10.,
+           max(&date_col) as max_date format=yymmdd10.
     from &lib..&table
     where &date_col is not null;
 quit;
