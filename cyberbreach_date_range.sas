@@ -22,29 +22,42 @@ rsubmit;
 ----------------------------------------------------------------------------*/
 
 /*---------------------------------------------------------------------------
-  1. Discover the cyber-breach table inside the Audit Analytics library
+  1. Discover the cyber-breach table.
+
+  NOTE: `audit.cybersecurity` does not exist on every subscription - the
+  member name (and sometimes the library) differs. So scan ALL assigned
+  libraries for anything that looks like the cyber-breach table, then set
+  the LIB / TABLE macro variables below to what you find.
 ---------------------------------------------------------------------------*/
 proc sql;
-    title "Candidate cyber-breach tables in the AUDIT library";
-    select memname
+    title "Candidate cyber-breach tables across all assigned libraries";
+    select libname, memname
     from dictionary.tables
-    where libname = "AUDIT"
-      and (upcase(memname) like "%CYBER%" or upcase(memname) like "%BREACH%");
+    where upcase(memname) like "%CYBER%" or upcase(memname) like "%BREACH%"
+    order by libname, memname;
 quit;
 title;
 
-/* Set the table you want here (from the list above).                       */
-/* Common member name is CYBERSECURITY; adjust if your list differs.        */
-%let table = cybersecurity;
+/* If the scan above is empty, list what the AUDIT library actually holds:  */
+proc sql;
+    title "All members in the AUDIT library";
+    select memname from dictionary.tables
+    where libname = "AUDIT" order by memname;
+quit;
+title;
+
+/* Set the library and table you found above.                              */
+%let lib   = audit;           /* <-- library from the scan (LIBNAME col)   */
+%let table = cybersecurity;   /* <-- member  from the scan (MEMNAME col)   */
 
 /*---------------------------------------------------------------------------
   2. Inspect the columns so we can pick the date and firm identifier
 ---------------------------------------------------------------------------*/
 proc sql;
-    title "Columns in AUDIT.&table";
+    title "Columns in &lib..&table";
     select name, type, format, label
     from dictionary.columns
-    where libname = "AUDIT" and upcase(memname) = upcase("&table");
+    where upcase(libname) = upcase("&lib") and upcase(memname) = upcase("&table");
 quit;
 title;
 
@@ -69,7 +82,7 @@ proc sql;
            min(&date_col)      as first_disclosure format=date9.,
            max(&date_col)      as last_disclosure  format=date9.,
            count(*)            as n_breaches
-    from audit.&table
+    from &lib..&table
     where &date_col is not null
     group by &firm_col
     order by firm;
@@ -87,7 +100,7 @@ proc sql;
     title "Overall cyber-breach disclosure-date range";
     select min(&date_col) as min_date format=date9.,
            max(&date_col) as max_date format=date9.
-    from audit.&table
+    from &lib..&table
     where &date_col is not null;
 quit;
 title;
